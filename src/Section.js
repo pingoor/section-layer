@@ -1,29 +1,31 @@
 ﻿define(['dojo/_base/declare',
   'dojo/_base/lang',
   'dojo/topic',
+  'dojo/_base/connect',
   "dojo/dom-construct",
   "dojo/dom-style",
   "dojo/dom-geometry",
   "dojo/dom-class",
+  "dojo/dom-attr",
   "esri/geometry/screenUtils"
 ],
-function (declare, lang, topic, domConstruct, domStyle, domGeometry, domClass, screenUtils) {
+function (declare, lang, topic, dojoConnect, domConstruct, domStyle, domGeometry, domClass, domAttr, screenUtils) {
     var clazz = declare(null, {
-        declaredClass: 'pingoor.layers.Section',
 
-        // should be unique
+        declaredClass: 'esri.layers.Section',
+
         id: null,
 
-        // default offset 
-        offset: { x: 5, y: 5 },
+        offset: { x: 3, y: 3 },
 
         style: {
             "position": "absolute",
             "margin": "0px",
             "padding": "0px",
-            "z-index": "100", 
+            "z-index": "100",
             "width": "100px",
-            "height": "100px"
+            "height": "100px",
+            'pointer-events': 'auto',
         },
 
         data: null,
@@ -34,21 +36,24 @@ function (declare, lang, topic, domConstruct, domStyle, domGeometry, domClass, s
             lang.mixin(this, params);
             this._position = position || this.position;
             this._content = content || this.content;
-            this.data = this.data || {};
-            this.id = this.id;
-            // set default style
+            this._setDefaultStyle();
+            this._initDomNode();
+            this._drawn = false;
+        },
+
+        _setDefaultStyle: function () {
             if (!lang.exists("position", this.style))
                 this.style["position"] = "absolute";
             if (!lang.exists("width", this.style))
                 this.style["width"] = "100px";
             if (!lang.exists("height", this.style))
                 this.style["height"] = "100px";
-            this._initDomNode();
-            this._drawn = false;
+            if(!lang.exists("pointer-events", this.style))
+                this.style["pointer-events"] = "auto";
         },
 
         _initDomNode: function(){
-            this._div = domConstruct.create('div', { style: this.style, id: this.id });
+            this._div = domConstruct.create('div', { style: this.style });
             if (this.className || typeof this.className === 'string')
                 domClass.add(this._div, this.className);
 
@@ -89,6 +94,7 @@ function (declare, lang, topic, domConstruct, domStyle, domGeometry, domClass, s
 
         setId: function(id){
             this.id = id;
+            this._div && domAttr.set(this._div, "id", id);
         },
 
         setPosition: function (position) {
@@ -136,6 +142,11 @@ function (declare, lang, topic, domConstruct, domStyle, domGeometry, domClass, s
 
         refresh: function () {
             this._refresh();
+        },
+
+        // check if the section's position is contained in a special extent.
+        _viewInExtent: function(extent) {
+            return extent.contains(this._position);
         }
 
     });

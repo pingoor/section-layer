@@ -9,34 +9,33 @@
   "esri/kernel",
   'esri/geometry/screenUtils',
   'esri/layers/layer',
-  "./Section"
+  "./Section",
 ],
 function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle, kernel,
     screenUtils, Layer, Section) {
-
+    /* SectionLayer 用于在地图上显示任何用户自定义的展示内容，包括标签、图标等信息 */
     var clazz = declare(Layer, {
 
-        declaredClass: 'pingoor.layers.SectionLayer',
+        declaredClass: 'esri.layers.SectionLayer',
 
-        // default layer opacity
         opacity: 1,
 
         constructor: function () {
             this.sections = [];
 
-            dojoConnect.connect(this, "onSuspend", this, this._onSuspend);
-            dojoConnect.connect(this, "onResume", this, this._onResume);
-
+            this.registerConnectEvents();
             this._drawn = false;
             this.loaded = true;
             this.onLoad(this);
         },
 
+
         add: function (section) {
             if (section._layer === this) return section;
-            if (this.sections.indexOf(section) < 0)
+            if (this.sections.indexOf(section) < 0) {
+                !section.id && (section.setId(this._createSectionId(this.sections.length)));
                 this.sections.push(section);
-            else return section;
+            } else return section;
 
             section._setLayer(this);
             this._drawSection(section);
@@ -45,6 +44,10 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
             return section;
         },
         onSectionAdd: function(){},
+
+        _createSectionId: function(idx){
+            return 'section_' + idx;
+        },
 
         _drawSection: function (section) {
             if (!this._drawn) return;
@@ -58,10 +61,25 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
             section._drawn = true;
         },
 
-        clear: function(){
-            for (var i = 0, k = this.Sections; i < k.length; i++) {
-                this.remove(k[i]);
-            }
+        setRelativeLayer: function(relativeLayer){
+            this._relativeLayer = relativeLayer;
+            this._relativeLayerVisibilityChange = relativeLayer.on('visibility-change', lang.hitch(this, function (evt) {
+                this.setVisibility(evt.visible);
+            }));
+            this._relativeLayerScaleVisibilityChange = relativeLayer.on('scale-visibility-change', lang.hitch(this, function (evt) {
+                this.setVisibility(relativeLayer.visibleAtMapScale);
+            }));
+        },
+
+        removeRelativeLayer:function(){
+            this._relativeLayerVisibilityChange && this._relativeLayerVisibilityChange.remove();
+            this._relativeLayerScaleVisibilityChange && this._relativeLayerScaleVisibilityChange.remove();
+            this._relativeLayer = null;
+        },
+
+        clear: function () {
+            this.sections = [];
+            this._div.clear();
             this.onSectionClear()
         },
         onSectionClear: function(){},
@@ -70,8 +88,9 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
             var index;
             if (-1 === (index = array.indexOf(this.sections, section)))
                 return null;
-            section = this.Sections.splice(index, 1)[0];
+            section = this.sections.splice(index, 1)[0];
             section._setLayer(null);
+            domConstruct.destroy(section.getNode());
             this.onSectionRemove(section);
             return section;
         },
@@ -93,15 +112,16 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
                 overflow: "visible",
                 opacity: this.opacity
             };
-            "css-transforms" === map.navigationMode ?
-                (style[kernel._css.names.transform] = kernel._css.translate(map.__visibleDelta.x, map.__visibleDelta.y), domStyle.set(this._div, style), this._left = map.__visibleDelta.x, this._top = map.__visibleDelta.y) :
-                (style.left = "0px", styleh.top = "0px", domStyle.set(this._div, style), this._left = this._top = 0);
             domStyle.set(this._div, style);
             if (!this._drawn) {
                 this._drawn = true;
                 this._refresh();
             }
-
+            this._div.clear = lang.hitch(this, function(){  
+                domConstruct.empty(this._div); 
+            });
+            this.evaluateSuspension();
+            this.enableMouseEvents();
             this._connect(this._map);
             return this._div;
         },
@@ -114,39 +134,31 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
         },
 
         _connect: function(map){
-            this._onPanStartHandler_connect = dojoConnect.connect(map, "onPanStart", this, this._onPanStartHandler);
-            this._onPanHandler_connect = dojoConnect.connect(map, "onPan", this, this._onPanHandler);
-            this._onPanEndHandler_connect = dojoConnect.connect(map, "onPanEnd", this, this._onPanEndHandler);
-            this._onZoomStartHandler_connect = dojoConnect.connect(map, "onZoomStart", this, this._onZoomStartHandler);
-            this._onZoomHandler_connect = dojoConnect.connect(map, "onZoom", this, this._onZoomHandler);
-            this._onZoomEndHandlers_connect = dojoConnect.connect(map, "onZoomEnd", this, this._onZoomEndHandler);
-            this._onScaleHandler_connect = dojoConnect.connect(map, "onScale", this, this._onScaleHandler);
             this._onResizeHandler_connect = dojoConnect.connect(map, "onResize", this, this._onResizeHandler);
-            this._onExtentChangeHandler_connect = dojoConnect.connect(map, "onExtentChange", this, this._onExtentChangeHandler);
+            this._onExtentChangeHandler_connect = dojoConnect.connect(map, "onExtentChange", this, this._onExtentChangeHandler);           
         },
 
         _disconnect: function(){
-            dojoConnect.disconnect(this._onPanStartHandler_connect);
-            dojoConnect.disconnect(this._onPanHandler_connect);
-            dojoConnect.disconnect(this._onPanEndHandler_connect);
-            dojoConnect.disconnect(this._onZoomStartHandler_connect);
-            dojoConnect.disconnect(this._onZoomHandler_connect);
-            dojoConnect.disconnect(this._onZoomEndHandlers_connect);
-            dojoConnect.disconnect(this._onScaleHandler_connect);
             dojoConnect.disconnect(this._onResizeHandler_connect);
             dojoConnect.disconnect(this._onExtentChangeHandler_connect);
         },
 
         _refresh: function () {
             var section;
-            for (var i = 0, len = this.sections.length; i < len; i++) {
-                section = this.sections[i];
-                this._drawSection(section);
+            if (this.sections &&　this.sections.length > 0)
+            {
+                this._div.clear && this._div.clear();
+                for (var i = 0, len = this.sections.length; i < len; i++) {
+                    section = this.sections[i];
+                    if(section._viewInExtent(this._map.extent)){
+                        this._drawSection(section);
+                    }
+                }
             }
         },
 
         refresh: function(){
-            this._refresh();
+            this._map && this._onExtentChangeHandler(this._map.extent)
         },
 
         setOpacity: function (opacity) {
@@ -154,30 +166,9 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
             domStyle.set(this._div, { opacity: this.opacity });
         },
 
-        _onPanStartHandler: function () {
-            this.hide();
-        },
-
-        _onPanHandler: function () {
-            this.hide();
-        },
-
-        _onPanEndHandler: function () {
-            this._refresh();
-            this.show();
-        },
-
-        _onZoomStartHandler: function () {
-            this.hide();
-        },
-
-        _onZoomHandler: function () {
-            this.hide();
-        },
-
-        _onZoomEndHandler: function () {
-            this._refresh();
-            this.show();
+        setVisibility: function(visible){
+            this.inherited(arguments);
+            domStyle.set(this._div, "display", visible ? "block" : "none");
         },
 
         _onResizeHandler: function () {
@@ -185,29 +176,74 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
                 width: this._map.width + 'px',
                 height: this._map.height + 'px'
             });
-            this._refresh();
-            this.show();
-        },
-
-        _onScaleHandler: function () {
-            this._refresh();
-            this.show();
+            this._onExtentChangeHandler();
         },
 
         _onExtentChangeHandler: function () {
-            this._refresh();
-            this.show();
+            if(!this.suspended){
+                this._refresh();
+            }
         },
 
-        _onSuspend: function () {
-            this._disconnect();
-            this.hide();
+        _onMouseOverHandler: function(e){
+            this.onMouseOver(e);
         },
+        onMouseOver: function(){},
 
-        _onResume: function () {
-            this._connect(this._map);
-            this.show();
+        _onMouseMoveHandler: function(e){
+            this.onMouseMove(e);
         },
+        onMouseMove: function(){},
+
+        _onMouseOutHandler: function(e){
+            this.onMouseOut(e);
+        },
+        onMouseOut: function(){},
+
+        _onMouseDownHandler: function(e){
+            this.onMouseDown(e);
+        },
+        onMouseDown: function(){},
+
+        _onMouseUpHandler: function(e){
+            this.onMouseUp(e);
+        },
+        onMouseUp: function(){},
+
+        _onClickHandler: function(e){
+            this.onClick(e);
+        },
+        onClick: function(){},
+
+        _onDbClickHandler: function(e){
+            this.onDbClick(e);
+        },
+        onDbClick: function(){},
+
+        enableMouseEvents: function(){
+            if (!this._mouseEvents) {             
+                this._onmouseover_connect = dojoConnect.connect(this._div, "onmouseover", this, this._onMouseOverHandler);
+                this._onmousemove_connect = dojoConnect.connect(this._div, "onmousemove", this, this._onMouseMoveHandler);
+                this._onmouseout_connect = dojoConnect.connect(this._div, "onmouseout", this, this._onMouseOutHandler);
+                this._onmousedown_connect = dojoConnect.connect(this._div, "onmousedown", this, this._onMouseDownHandler);
+                this._onmouseup_connect = dojoConnect.connect(this._div, "onmouseup", this, this._onMouseUpHandler);
+                this._onclick_connect = dojoConnect.connect(this._div, "onclick", this, this._onClickHandler);
+                this._ondblclick_connect = dojoConnect.connect(this._div, "ondblclick", this, this._onDbClickHandler);
+                this._mouseEvents = true;
+            }
+        },
+        disableMouseEvents: function(){
+            if (this._mouseEvents) {
+                dojoConnect.disconnect(this._onmouseover_connect);
+                dojoConnect.disconnect(this._onmousemove_connect);
+                dojoConnect.disconnect(this._onmouseout_connect);
+                dojoConnect.disconnect(this._onmousedown_connect);
+                dojoConnect.disconnect(this._onmouseup_connect);
+                dojoConnect.disconnect(this._onclick_connect);
+                dojoConnect.disconnect(this._ondblclick_connect);
+                this._mouseEvents = false;
+            }
+        }
 
     });
 
