@@ -51,7 +51,8 @@ function (declare, lang, dojoConnect, array, topic, dom, domConstruct, domStyle,
 
         _drawSection: function (section) {
             if (!this._drawn) return;
-
+            
+            section._div.innerHTML = section._content;
             var screenPt = screenUtils.toScreenPoint(this._map.extent, this._map.width, this._map.height, section._position);
             domStyle.set(section._div, {
                 "left": screenPt.x + section.offset.x + "px",
