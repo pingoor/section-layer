@@ -56,17 +56,19 @@ function (declare, lang, topic, dojoConnect, domConstruct, domStyle, domGeometry
             this._div = domConstruct.create('div', { style: this.style });
             if (this.className || typeof this.className === 'string')
                 domClass.add(this._div, this.className);
-
-            if (this._content) {
-                if (typeof this._content === 'string') {
-                    this._div.innerHTML = this._content;
-                } else if (this._content.domNode) {
-                    this._content.placeAt(this._div);
-                } else if (this._content instanceof HTMLElement) {
-                    domConstruct.place(this._content, this._div);
-                }
-            }
         },
+      
+       _bindContent: function(){
+           if (this._content) {
+                  if (typeof this._content === 'string') {
+                      this._div.innerHTML = this._content;
+                  } else if (this._content.domNode) {
+                      this._content.placeAt(this._div);
+                  } else if (this._content instanceof HTMLElement) {
+                      domConstruct.place(this._content, this._div);
+                  }
+              }
+       },
 
         getNode: function(){
             return this._div;
@@ -129,15 +131,7 @@ function (declare, lang, topic, dojoConnect, domConstruct, domStyle, domGeometry
             domStyle.set(this._div, this.style);
             if (this.className || typeof this.className === 'string')
                 domClass.add(this._div, this.className);
-            if (this._content) {
-                if (typeof this._content === 'string') {
-                    this._div.innerHTML = this._content;
-                } else if (this._content.domNode) {
-                    this._content.placeAt(this._div);
-                } else if (this._content instanceof HTMLElement) {
-                    domConstruct.place(this._content, this._div);
-                }
-            }
+            this._bindContent();
         },
 
         refresh: function () {
